@@ -1,0 +1,40 @@
+name: CI - Build & Push Image
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::975050061334:role/github-actions-nginx-platform
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          ECR_URI=975050061334.dkr.ecr.us-east-1.amazonaws.com/nginx-demo
+
+          docker build -t $ECR_URI:$IMAGE_TAG -t $ECR_URI:latest src/
+          docker push $ECR_URI:$IMAGE_TAG
+          docker push $ECR_URI:latest
+
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_URI=$ECR_URI:$IMAGE_TAG" >> $GITHUB_OUTPUT

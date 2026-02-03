@@ -1,0 +1,45 @@
+name: CD - Deploy to ECS
+
+on:
+  workflow_run:
+    workflows: ["CI - Build & Push Image"]
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::975050061334:role/github-actions-nginx-platform
+          aws-region: us-east-1
+
+      - name: Render ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: deploy/task-def.json
+          container-name: nginx
+          image: 975050061334.dkr.ecr.us-east-1.amazonaws.com/nginx-demo:latest
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          cluster: nginx-fargate-demo-cluster
+          service: nginx-fargate-demo-service
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          wait-for-service-stability: true
